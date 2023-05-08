@@ -1,0 +1,720 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Nov 21 14:19:00 2021
+
+@author: Ching-Chuan Tsong
+"""
+
+"""
+##############################
+探討: return 敘述統計量, 常態檢定, 次數分配圖, qq plot
+      參考: AI 4-5 與 抓股票資料與初步分析_1100306.py
+##############################
+"""
+
+
+"""
+###############################################
+#1. 安裝 Anaconda (會自動安裝spyder與jupyter notebook)
+#   參考:https://simplelearn.tw/2022/08/09/anaconda-3-%E4%BB%8B%E7%B4%B9%E5%8F%8A%E5%AE%89%E8%A3%9D%E6%95%99%E5%AD%B8-2022%E6%9B%B4%E6%96%B0%E7%89%88/
+#  
+#      https://www.anaconda.com/products/distribution
+#      往下拉, 看到 "Anaconda Installers"===>  選Windows Python 3.9 64bit
+#      下載, 無腦安裝法 (要花一些時間). Anaconda可以不要註冊
+#
+# 開啟Spyder. 設定介面 
+#             Tools===>preference===>Appearance==>更改字體大小與dark/light
+#                                     在Syntax hightlighting theme===>選Spyder
+#                                      fonts改字體大小 (18)      
+#
+#
+#2. 在Anaconda Prompt之下 (key in python)
+#     i.e. c:\>python
+#     >>>表示python prompt
+#      key in: print("Hello Python, I am Tsong")
+#      exit() 離開Python
+#
+#3. Anaconda Prompt管理套件 
+#   Anaconda ===> Environments (base or mypython39) ===> 綠色箭頭 ===> Open Terminal
+#            ===> 進入Anaconda Prompt 
+#   conda list
+#   conda update 套件名稱
+#   pip install 套件名稱
+#
+# *** 用pip安裝套件會自動安裝用到的相關套件, 比conda安裝要好 ***
+#
+#   pip uninstall 套件名稱
+#   conda install 套件名稱 (pympler)
+#   conda uninstall 套件名稱 
+#
+#  PyPI: Python package index (看有甚麼套件)
+#
+###############################################
+"""
+
+
+"""
+#######################
+記得先安裝: 110/11/14.  111/12/17有問題! 
+           Anaconda Prompt: pip install pandas-datareader 
+           
+           111/12/17
+           pip install yfinance==0.1.70   注意: 不要安裝最新版!
+#######################
+"""
+
+#111//12/17(for mypython39 OK)
+
+#===============================================#
+import pandas_datareader.data as web #抓股票資料 111/12/17有問題!
+import yfinance as yf #抓股票資料 pip install yfinance==0.1.70. 注意: 不要安裝最新版!
+
+import pandas as pd
+import numpy as np
+
+from datetime import datetime
+
+import matplotlib.pyplot as plt
+from pylab import mpl
+import seaborn as sns
+import scipy.stats as scs #敘述統計量
+import statsmodels.api as sm #QQ plot
+from scipy.stats import t #查分配表
+
+#import warnings #忽略warnings  111/12/11 for python 3.9
+#================================================#
+
+sns.set() #seaborn預設的組合風格
+#plt.style.use('seaborn')
+#plt.style.available #各種style
+mpl.rcParams['font.family'] = 'serif'
+
+np.set_printoptions(precision=5, suppress=True,
+                    formatter={'float': lambda x: f'{x:6.3f}'})
+#显示小数位数
+pd.set_option('display.float_format', lambda x: f'{x:6.3f}')
+
+#warnings.filterwarnings("ignore") #忽略warnings  111/12/11
+#===============================================#
+
+
+"""
+#=======================================#
+# 抓Yahoo Finance data
+#=======================================#
+"""
+
+"""
+##########################################
+參考: Yahoo Finance網頁首頁中Markets. 110/10/11
+
+Yahoo Bitcoin代碼: BTC-USD
+      Treasury Yield 10 Years (^TNX)
+      USD/JPY (JPY=X)
+      VIX指數 (^VIX)
+      美元指數 (DX-Y.NYB)
+##########################################      
+"""
+
+#Give it a try! 110/10/11
+#Bitcoin, USD/JPY (JPY=X), TB 10 year
+
+start = datetime(2018, 1, 15)
+end = datetime(2022, 9, 5) #datetime(2020, 11, 27)
+
+symbol = "BTC-USD"
+
+###########################################
+#bit_raw = web.DataReader(symbol, 'yahoo', start, end) #111/12/17有問題!
+
+#111/12/17 OK!
+bit_raw = yf.download(symbol,
+                      start=start,
+                      end=end,
+                      progress=False) #progress=False:省略當前進度
+###########################################
+
+bit_raw.info()
+bit_raw.head()
+bit_raw.tail()
+
+bit_close = bit_raw[["Close"]] #select "Close" column, df
+bit_close.columns = [symbol] #change column name
+bit_close
+
+#df 畫圖(收盤價)
+bit_close.plot(figsize=(10, 6))
+plt.show()
+
+#將資料存成資料框
+bit_raw.to_csv("bitcoin.csv")
+
+#讀取該數據 110/11/09
+bitcoin = pd.read_csv("bitcoin.csv", parse_dates=True, index_col=0)
+bitcoin.info()
+bitcoin.head()
+#===========================#
+
+#################################
+#jpn_raw = web.DataReader('JPY=X', 'yahoo', start, end)
+
+#111/12/17 OK!
+jpn_raw = yf.download('JPY=X',
+                       start=start,
+                       end=end,
+                       progress=False) #progress=False:省略當前進度
+#################################
+
+jpn_raw.head()
+jpn_raw.tail()
+
+#劃出匯率收盤價
+jpn_raw[["Close"]].plot(figsize=(10, 6))
+plt.show()
+
+###############################
+#tb10_raw = web.DataReader('^TNX', 'yahoo', start, end)
+
+tb10_raw = yf.download('^TNX',
+                       start=start,
+                       end=end,
+                       progress=False) #progress=False:省略當前進度
+###############################
+
+tb10_raw.head()
+tb10_raw.tail()
+#============================================#
+
+
+#VIX指數
+start = datetime(2018, 1, 15)
+end = datetime(2022, 9, 5)
+
+############################
+#vix_raw = web.DataReader('^VIX', 'yahoo', start, end)
+
+vix_raw = yf.download('^VIX',
+                       start=start,
+                       end=end,
+                       progress=False) #progress=False:省略當前進度
+############################
+
+vix_raw.info()
+vix_raw.tail()
+
+vix_raw[["Close"]].plot(figsize=(10, 6))
+plt.show()
+
+
+#美元指數 (DX-Y.NYB)
+symbol = 'DX-Y.NYB'
+start = datetime(2018, 1, 15)
+end = datetime(2022, 9, 5)
+
+######################
+#us_index = web.DataReader('DX-Y.NYB', 'yahoo', start, end)[["Close"]]
+
+us_index = yf.download(symbol,
+                       start=start,
+                       end=end,
+                       progress=False)[["Close"]] #取出收盤價
+######################
+
+us_index.info()
+us_index.tail()
+us_index.columns = ["USDX"]
+
+us_index[["USDX"]].plot(figsize=(10, 6))
+plt.show()
+
+
+#TSLA
+tsla = yf.download('TSLA',
+                   start='2018-01-15',
+                   end='2022-12-27',
+                   progress=False)[["Close"]] #取出收盤價
+
+tsla.columns = ["TSLA"]
+tsla
+
+tsla[["TSLA"]].plot(figsize=(10, 6))
+plt.show()
+####################################
+
+
+
+"""
+==================================
+台積電:     2330.TW
+鴻海:       2317.TW
+台塑:       1301.TW 
+台灣50:     0050.TW
+================================= 
+"""
+
+"""
+==============================
+Note:
+#若有^VIX, 必須處理跨國股市開盤不同日期. 
+#resample('B').ffill(), or resample('D').ffill()
+#stickers = ['2330.TW', '2317.TW', '1301.TW', '0050.TW', '^VIX']
+===============================
+"""
+
+stickers = ['2330.TW', '2317.TW', '1301.TW', '0050.TW']
+
+start = datetime(2016, 1, 4)
+end = datetime(2021, 3, 4) #datetime(2020, 11, 27)
+
+data = pd.DataFrame()
+
+for sticker in stickers:
+    ###################################
+    #df_data = web.DataReader(sticker, 'yahoo', start, end) #dataframe
+    
+    df_data = yf.download(sticker,
+                          start=start,
+                          end=end,
+                          progress=False) 
+    ###################################
+    data[sticker] = df_data['Close']#.resample('B').ffill() #ffill NaN
+
+#==========================#
+
+#or.  yf.download()可以不用loop
+data2 = yf.download(stickers,
+                    start=start,
+                    end=end,
+                    progress=False)["Close"] 
+
+data2
+#===========================#
+
+data
+data.info()
+data.isnull().any() #都沒有NaN
+
+#review
+data.columns
+data.columns.values #array
+data.columns.to_list() #list
+#or
+list(data.columns)
+
+data.index
+data.count() #每個column各有幾筆非NaN的觀察值
+len(data) #有幾筆觀察值
+
+#敘述統計量
+data.describe().round(3)
+
+#存到disc
+data.to_csv("stocks_tw_1111218.csv")
+#========================================#
+
+
+#df畫圖(normalized後)
+(data / data.iloc[0]).plot(figsize=(10, 6), cmap="coolwarm")
+plt.show()
+#==========================================#
+
+#returns
+rets = np.log(data / data.shift(1)).dropna()
+rets
+
+#畫圖
+rets.plot(figsize=(10, 6), subplots=True)
+plt.show()
+
+#or
+rets.plot(figsize=(10, 6), subplots=True, layout=(2, 2),
+          sharex=True)
+plt.show()
+#=========================================#
+
+#敘述統計量
+rets.describe()
+
+
+"""
+#################
+#procedures
+#################
+"""
+
+############################
+def dN(x, mu, sigma):
+   ''' Probability density function of N(mu, sigma^2)
+   '''
+   z = (x - mu) / sigma
+   pdf = np.exp(-0.5 * z ** 2) / np.sqrt(2 * np.pi * sigma ** 2)
+   return pdf
+#############################
+
+def return_histogram(rets, title=''):
+    ''' Plots a histogram of the returns and pdf of N(0, 1)
+    '''
+    plt.figure(figsize=(10, 6))
+    x = np.linspace(min(rets), max(rets), 100)
+    plt.hist(np.array(rets), bins=50,
+             density=True, label='frequency')  
+    y = dN(x, np.mean(rets), np.std(rets))  
+    plt.plot(x, y, linewidth=3, label='PDF', c="red")  
+    plt.xlabel('log returns')
+    plt.ylabel('frequency/probability')
+    plt.title(title, fontsize=24)
+    plt.legend()
+    plt.show()
+#######################
+
+#參考: PFF 13-1
+def return_qqplot(rets, title=''): #rets必須是array且無NaN
+    ''' Generates a Q-Q plot of the returns.
+    '''
+    #先將之標準化
+    rets_ = (rets - rets.mean()) / rets.std()
+    #"s" - standardized line, “r” - A regression line is fit
+    fig = sm.qqplot(rets_, line='s', alpha=0.5) 
+    fig.set_size_inches(10, 6)
+    plt.title(title, fontsize=24)
+    plt.xlabel('theoretical quantiles')
+    plt.ylabel('sample quantiles')
+#######################
+
+#檢定Normal
+def print_statistics(arr): #arr必須是array且無NaN
+    print(f"Skewness:       {scs.skew(arr):14.3f}")
+    print(f"Skew test:      {scs.skewtest(arr)[0]:14.3f}")
+    print('Skew test p-value %14.3f' % scs.skewtest(arr)[1])
+    print('Kurt:             %14.3f' % scs.kurtosis(arr))
+    print('Kurt test         %14.3f' % scs.kurtosistest(arr)[0])
+    print('Kurt test p-value %14.3f' % scs.kurtosistest(arr)[1])
+    stat, pval = scs.normaltest(arr)
+    print('Norm test         %14.3f' % stat)
+    print('Norm test p-value %14.3f' % pval)
+#######################
+
+#自訂敘述統計量
+def des_stat(x): 
+    stat, pval = scs.normaltest(x)
+    return pd.Series([x.count(), x.min(), x.median(),
+                      x.mean(), x.max(), x.max()-x.min(),
+                      x.std(), x.skew(), x.kurt(), stat, pval],
+                      index=['count', 'min', 'median', 'mean',
+                              'max', 'range', 'std', 'skew', 'kurt',
+                              'JB', 'p-value(JB)'])
+#######################
+
+#regression line + scatter
+def regplot_proc(data, y_symbol, x_symbol):
+    plt.figure(figsize=(10, 6))
+    scatter_kws = {"color": "blue", "alpha": 0.6, "s": 80,
+                   "edgecolor": "white",
+                   "lw": 1.5}
+
+    line_kws = {"color": "r", "alpha": 0.5, "lw": 2}
+
+    sns.regplot(data=data, x=x_symbol, y=y_symbol, fit_reg=True, 
+                scatter_kws=scatter_kws,
+                line_kws=line_kws)
+    plt.title("Regression line and scatter plot", fontsize=24)
+    plt.show()
+#######################    
+
+"""
+==================
+#主程式
+==================
+"""
+
+#使用自訂函數計算敘述統計量
+data
+data.apply(des_stat)
+rets.apply(des_stat)
+
+data.apply(des_stat).to_csv("stock_stat.csv")
+
+#畫regression line
+x_symbol = stickers[-1] #0050
+x_symbol
+stickers[:-1]
+
+for y_symbol in stickers[:-1]:
+    regplot_proc(rets, y_symbol, x_symbol)
+#==================================#    
+    
+#計算returns常態檢定統計量與畫圖
+for sticker in stickers:
+    print(f"\n{sticker}")
+    print(30 * "=")
+    print_statistics(rets[sticker])
+    return_histogram(rets[sticker], sticker)
+    return_qqplot(rets[sticker], sticker)    
+#===========================================#
+
+#returns pair plot
+sns.set(font_scale=1) # 改變 fontsize (xlabel, xticklabel)
+# diag_kind="hist", 'kde'; kind="reg", 'scatter'
+# palette="husl", "cubehelix", "dark","RdBu_r","bwr"
+#參考: Color palettes.  Note: matplotlib colormap (cmap)有些也可以用
+#  https://zhuanlan.zhihu.com/p/98729226
+sns.pairplot(rets, #palette="dark", 
+             diag_kind="kde",
+             kind='scatter', #'scatter'
+             markers=["o"],
+             height=2.5, #fig高度
+             plot_kws=dict(s=30, edgecolor="white", linewidth=1, alpha=1), #kind='reg'此指令失靈
+             #base環境用dict(shade=True), mypython39環境用dict(fill=True) 111/12/11
+             diag_kws=dict(fill=True) 
+             ) 
+
+plt.show()
+#===============================================#
+
+#returns corr
+corr_df = rets.corr()
+corr_df
+
+#corr 熱力圖 110/12/09
+plt.subplots(figsize=(9, 9)) # 設定畫面大小
+
+#vmax,vmin, 图例中最大值和最小值的显示值. vmax=None. cmap="Blues", Reds
+sns.heatmap(corr_df, annot=True, vmax=None, square=True, cmap="Blues")
+#plt.savefig('./BluesStateRelation.png')
+plt.show()
+
+#rolling corr
+#2330, 2317, 1301分別與0050 rolling 相關係數
+plt.figure(figsize=(10, 6))
+rets[stickers[:-1]].rolling(100).corr(rets["0050.TW"]).plot()
+plt.title("Rolling corr with 0050.TW", fontsize=20)
+plt.show()
+#========================================#
+
+"""
+==========================================
+CAPM:
+    ri = rf + beta * (rm - rf)
+    ri: stock i return
+    rf: riskfree rate
+    rm: market return
+    beta = cov(ri, rm)/var(rm), 系統性風險(風險係數)
+    beta > 1 (< 1): 攻擊(防禦)型股票 
+==========================================    
+"""
+
+r = 0.005 #rf
+market = '0050.TW' #0050.TW
+
+rets.columns
+rets.index.year.unique() #2016~2021
+
+"""
+#check
+sym = "2317.TW"
+rets[[sym, market]].cov()#.loc[sym, market]
+"""
+
+
+first_year = rets.index.year[0]
+last_year = rets.index.year[-1]
+
+res_beta = pd.DataFrame()#要存beta值. 每個股票, 分年計算beta值
+
+res_beta
+
+"""
+#取出2016數據
+rets.loc["2016"]
+"""
+
+for sym in rets.columns[:-1]:
+    print(f"\n{sym}")
+    print(30* "=")
+    
+    for year in range(first_year, last_year+1):
+        rets_ = rets.loc[f"{year}"]
+        
+        #cov matrix中, sym row, market column的值
+        cov = rets_.cov().loc[sym, market]
+        var = rets_[market].var()
+        beta = cov / var
+        
+        res_dict = {"symbol": sym,
+                    "beta": beta,}
+        
+        df = pd.DataFrame(res_dict, index=[year])  
+        
+        ########################################                                                                   
+        #res_beta = res_beta.append(df) #與list寫法有點不同 (舊語法, 不久後無法使用!)
+        res_beta = pd.concat([res_beta, df]) #注意: dfs要放入中括號內!
+        ########################################
+        
+        fstring = f"{year} | beta={beta:.3f}"        
+        print(fstring)
+#===================================#    
+
+res_beta
+#=======================================#
+
+#以股票種類分群, 計算beta值的平均
+beta_mean = res_beta.groupby("symbol").mean()
+beta_mean
+
+#畫圖
+beta_mean.plot(figsize=(10, 6), kind="bar", edgecolor="k",
+               lw=1.5, alpha=0.8, rot=0)
+plt.title(f"Average beta ({first_year}~{last_year})",
+          fontsize=24)
+plt.show()
+#========================================#
+
+#取出2330.TW beta值
+res_beta.query('symbol=="2330.TW"')
+
+#畫圖
+beta_2330 = res_beta.query('symbol=="2330.TW"')
+
+beta_2330.plot(marker="o", figsize=(10, 6), markersize=10)
+plt.show()
+#========================================#
+
+#橫軸為年, 畫出這三種stock beta value
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for sticker in rets.columns[:-1]:
+    #取出beta, 要是df才會顯示legend
+    beta_df = res_beta.query('symbol==@sticker')[["beta"]] #df
+    #beta_df = res_beta[res_beta["symbol"]==sticker][["beta"]] #df
+    beta_df.columns = [sticker]
+    beta_df.plot(ax=ax, marker="o", markersize=10)
+
+plt.title("Beta values", fontsize=24)      
+plt.show()    
+#======================================#
+
+
+#111/01/24
+
+"""
+========================
+利用分群迴歸計算beta值
+========================
+"""
+
+#=========================================#
+def find_beta(data, yvar, xvars):
+    Y = data[yvar]
+    X = sm.add_constant(data[xvars]) #加入const term
+    model = sm.OLS(Y, X)
+    results = model.fit()
+    beta = results.params[1]
+                             
+    return beta #results.pvalues, results.params
+#==========================================#
+
+#測試指令
+rets_groupped = rets.groupby(rets.index.year) #以年將rets分群
+rets_groupped[["2330.TW", "0050.TW"]].mean()
+rets_groupped["2330.TW"].count() #or size()
+
+ser = rets_groupped.apply(find_beta, "2330.TW", ['0050.TW'])
+ser #series
+
+#轉成df
+df = pd.DataFrame(ser, columns=["beta"])
+df
+df.index
+df.columns
+
+["2330.TW"] * len(df)
+df["symbol"] = ["2330.TW"] * len(df)
+
+df
+#========================================#
+
+rets_groupped = rets.groupby(rets.index.year)
+
+plt.figure(figsize=(10, 6))
+beta_df = pd.DataFrame()
+
+for sym in stickers[:-1]:
+    ser = rets_groupped.apply(find_beta, sym, [market]) #series, 分群後呼叫find_beta函數
+    df = pd.DataFrame(ser, columns=["beta"]) #轉成df
+    df["symbol"] = [sym] * len(df) #製造"symbol"的column
+    
+    beta_df = pd.concat([beta_df, df])
+    df["beta"].plot(label=f"{sym}", marker="o", markersize=10)
+    plt.legend()
+
+plt.title("Beta values", fontsize=24)
+plt.show()
+
+beta_df
+#========================================#
+
+#計算各個stock beta各個年度平均
+beta_df.groupby("symbol")["beta"].mean()
+#=========================================#
+
+
+"""
+================================================
+加入檢定攻擊型或防禦型股票(confidence interval)
+================================================
+"""
+
+from scipy.stats import t #查分配表
+
+#=========================================#
+def ci_beta(data, yvar, xvars, ci=0.95): #ci
+    Y = data[yvar]
+    X = sm.add_constant(data[xvars]) #加入const term
+    model = sm.OLS(Y, X)
+    results = model.fit()
+    beta = results.params[1]
+    std = results.bse[1] #np.sqrt(results.cov_params().iloc[1, 1]) #注意: .cov_params(), 有()否則出錯!
+    n = len(Y)
+    K = X.shape[1]
+    LB = beta - std * t.ppf(0.5*(1+ci), n-K) # 分量 (prob: 95% CI)
+    UB = beta + std * t.ppf(0.5*(1+ci), n-K)
+    ser = pd.Series([beta, LB, UB], index=["beta", f"LB{int(ci*100)}", f"UB{int(ci*100)}"])
+                            
+    return ser 
+#==========================================#
+
+#測試指令
+ci_beta(rets, "2330.TW", [market]) #沒有分群
+
+#以年分群
+rets_groupped = rets.groupby(rets.index.year)
+res2 = rets_groupped.apply(ci_beta, "2330.TW", [market])
+res2
+#======================================#
+
+#畫圖
+fig, axes = plt.subplots(len(stickers[:-1]), 1, figsize=(10, 15), sharex=True)
+beta_ci_df = pd.DataFrame()
+
+for kk, sym in enumerate(stickers[:-1]):
+    df = rets_groupped.apply(ci_beta, sym, [market]) #series, 分群後呼叫ci_beta函數
+    
+    df["symbol"] = [sym] * len(df) #製造"symbol"的column
+    
+    beta_ci_df = pd.concat([beta_ci_df, df])
+    df["beta"].plot(ax=axes[kk], label="$\\beta$", marker="o", markersize=8)
+    df["LB95"].plot(ax=axes[kk], label="LB", marker="o", markersize=8)
+    df["UB95"].plot(ax=axes[kk], label="UB", marker="o", markersize=8)
+    axes[kk].legend()
+    
+    axes[kk].axhline(y=1, linewidth=2, color='m', linestyle='--')
+
+    axes[kk].set_title(f"Beta values for {sym}", fontsize=16)
+    
+plt.show()
+
+beta_ci_df
+#========================================#
+
+beta_ci_df.groupby("symbol")["beta"].mean()
+#=========================================#
